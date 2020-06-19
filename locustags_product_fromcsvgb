@@ -1,0 +1,111 @@
+#!/usr/bin/env python3
+
+import csv
+import sys
+from Bio import SeqIO
+
+def annotate (inputcsv, locationscsv, outputcsv):
+
+
+    #input csv file structure by column (get this by exporting a .gff file, converting to csv, and then arranging the columns by hand)
+    #1 - feature type
+    #2 - start
+    #3 - end
+    #4 - strand
+    #5 - gene
+    #6 - locus tag
+    #7 - product
+    #8 - protein ID
+
+##Makes a dictionary (gbdict) of the locus tag as the key and all the other info as the value
+##Also makes a dictionary (locusgenedict) of the locus tag as the key and the gene name as the value
+    gbdict = {}
+    locusgenedict = {}
+
+    entrycounter = 0
+    locuslist = []
+
+    with open(locationscsv, 'r') as fh:
+        fhcsv = csv.reader(fh, delimiter=',')
+        field_names_list = next(fhcsv)
+        next(fhcsv)
+        for entry in fhcsv:
+
+            entrycounter = entrycounter + 1
+            locuslist.append(entry[5])
+
+            if entry[0] != "Gene": #if I did include gene then all the CDS would be overwritten
+                locus_tag = entry[5].lstrip().rstrip()
+                gene = entry[4].lstrip().rstrip()
+                locusgenedict[locus_tag] = gene #locusgenedict will be used for converting the input to all locus tags
+                gbdict[locus_tag] = entry
+
+            if entry[0] == "Gene":  #Adding back in all the gene entries that did not have CDS records
+                if entry[5] not in locusgenedict.keys():
+                    locus_tag = entry[5].lstrip().rstrip()
+                    gene = entry[4].lstrip().rstrip()
+                    locusgenedict[locus_tag] = gene  # locusgenedict will be used for converting the input to all locus tags
+                    gbdict[locus_tag] = entry
+
+        #Fills in the empty gene keys in locusgenedict, so that all values have entries
+        for tag, gene in locusgenedict.items():
+            if gene == '':
+                locusgenedict[tag] = tag
+
+##KEEP ME IF YOU WANT A LOCUS TAG CONVERSION CSV!
+##Writes an output file of locusgenedict that has the locus tags in the first column and the gene name (or locus tag) in the second
+#        with open(outputlocustagcsv, 'w') as fh:
+#            writer = csv.writer(fh)
+#            for key, value in locusgenedict.items():
+#                writer.writerow([key, value])
+
+
+    print("%d entries counted in the gb csv file." %(entrycounter))
+    print("%d unique locus tags in the gb csv file." %len(set(locuslist)))
+    print("%d unique values were appended to the complete gb dictionary." %(len(gbdict)))
+    print("%d unique values were appended to the locus tags/gene name dictionary." %(len(locusgenedict)))
+
+
+
+    with open(inputcsv, 'r', encoding='utf-8-sig') as fh:
+        fhcsv = csv.reader(fh, delimiter=',')
+
+        entrylist = []
+        entrycounter = 0
+
+        for entry in fhcsv:
+            entrycounter = entrycounter + 1
+            entry = str(entry)
+            entry = entry.rstrip(" ]")
+            entry = entry.lstrip("[ ")
+            entry = entry.strip("''")
+
+            for k, v in locusgenedict.items():
+                if v == entry:
+                    entry = k  ##This converts all gene names in the input into locus tags
+                    entrylist.append(k)
+
+        print("%d entries were counted from the input file." %(entrycounter))
+        print("%d entries were converted into their locus tags." %(len(entrylist)))
+
+##The below code will search through the list of locus tags entries (from input) and write an outfile with their description
+##from the gbdict. 
+    for entry in entrylist:
+        entry = entry.lstrip().rstrip()
+        for locus, description in gbdict.items():
+                locus = locus.strip("''")
+                writeline = []
+                if locus == entry:
+                    writeline.append(entry)
+                    writeline.append(description)
+
+                    with open(outputcsv, 'a') as output:
+                        writer = csv.writer(output)
+                        writer.writerow(writeline)
+
+if __name__ == '__main__':
+    if len(sys.argv) == 4:
+         annotate(sys.argv[1], sys.argv[2], sys.argv[3])
+    else:
+         print("Usage: ")
+         sys.exit(0)
